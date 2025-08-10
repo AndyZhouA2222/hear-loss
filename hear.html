@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hearing Loss Simulator — Aurora Neon Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070a11;
+    --bg-grad: radial-gradient(1200px 800px at 10% -10%, #1a2a6c33 0%, transparent 60%),
+               radial-gradient(900px 700px at 90% 10%, #b21f1f22 0%, transparent 60%),
+               radial-gradient(800px 600px at 50% 120%, #6dd5ed22 0%, transparent 60%);
+    --card: rgba(18,22,34,.6);
+    --card-border: 1px solid rgba(255,255,255,.08);
+    --text:#eaf1ff;
+    --muted:#9aa3b2;
+    --acc:#77f0ff;
+    --ok:#3ddc97; --warn:#ffc857; --bad:#ff6b6b;
+    --btn:#0f1725; --btn-hover:#132038;
+    --shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
+    --radius: 18px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    color:var(--text);
+    background:var(--bg);
+    font:14px/1.5 Inter, ui-sans-serif, system-ui;
+    background-image: var(--bg-grad);
+    background-attachment: fixed;
+  }
+  .wrap{max-width:1150px;margin:auto;padding:28px}
+  .card{
+    background:var(--card);
+    border:var(--card-border);
+    border-radius:var(--radius);
+    padding:18px 18px 16px;
+    backdrop-filter: blur(10px) saturate(120%);
+    box-shadow: var(--shadow);
+    margin-bottom:16px;
+  }
+  h1{margin:0 0 10px;font-size:24px;font-weight:600;letter-spacing:.2px}
+  h2{margin:6px 0 10px;font-size:16px;color:var(--acc);font-weight:600}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  input[type="file"],select,button{width:100%}
+  select,button,input[type="checkbox"]{
+    padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);
+    background:linear-gradient(180deg, #101522, #0b101a); color:var(--text)
+  }
+  button{cursor:pointer;background:linear-gradient(180deg, #101522, #0b101a)}
+  button:hover{background:var(--btn-hover)}
+  .primary{background:linear-gradient(180deg,#1f375d,#172742); border-color:#294470}
+  .primary:hover{filter:brightness(1.05)}
+  .slider input[type=range]{width:100%}
+  .eq-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+  .eq-band{background:rgba(10,14,24,.7);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px}
+  .eq-band span{display:block;text-align:center;margin-top:6px;color:var(--muted);font-size:12px}
+  canvas{width:100%;height:140px;background:#000;border-radius:12px}
+  #waveWrap canvas, #lossWrap canvas{width:100%;height:320px;background:#000;border-radius:12px}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;margin-left:8px;background:#111e33;border:1px solid rgba(255,255,255,.08)}
+  .pill.ok{background:rgba(61,220,151,.12);color:var(--ok)}
+  .pill.warn{background:rgba(255,200,87,.12);color:var(--warn)}
+  .pill.bad{background:rgba(255,107,107,.12);color:var(--bad)}
+  .help{font-size:12px;color:var(--muted)}
+  .toolbar{display:flex;gap:8px;justify-content:flex-end}
+  .ghost{background:transparent;border:1px dashed rgba(255,255,255,.12)}
+  .ghost:hover{background:rgba(255,255,255,.04)}
+
+  /* 下拉菜单颜色修复 */
+  select {
+    color: var(--text);
+    background-color: #0d1625;
+  }
+  select option {
+    color: var(--text);
+    background-color: #0d1625;
+  }
+  select option:hover,
+  select option:checked {
+    background-color: #1f2d40;
+    color: #ffffff;
+  }
+</style></head>
+<body>
+<div class="wrap">
+
+  <!-- Top -->
+  <div class="card">
+    <h1>🎧 Hearing Loss Simulator</h1>
+    <div class="row">
+      <div>
+        <label>Main Audio</label>
+        <input id="mainFile" type="file" accept="audio/*" />
+      </div>
+      <div>
+        <label>Background Audio (optional)</label>
+        <input id="bgFile" type="file" accept="audio/*" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:6px">
+      <div>
+        <label>Loss Mode</label>
+        <select id="mode">
+          <option value="none">No hearing loss</option>
+          <option value="pred">Predicted loss (age & exposure)</option>
+          <option value="manual">Manual EQ (7 bands, attenuation)</option>
+          <option value="mild">Mild: 4 kHz 20 dB HL</option>
+          <option value="moderate">Moderate: 4 kHz 30 dB HL</option>
+          <option value="modsev">Moderate/Severe: 4 kHz 40 dB HL</option>
+        </select>
+      </div>
+      <div class="inline" style="justify-content:flex-end">
+        <button id="play" class="primary" style="min-width:120px">▶ Play</button>
+        <button id="stop">⏹ Stop</button>
+        <button id="download">💾 Export WAV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Predicted -->
+  <div class="card" id="predCard" style="display:none">
+    <h2>Prediction <span id="hlBadge" class="pill">Waiting…</span></h2>
+    <div class="row3">
+      <div class="slider">
+        <label>Age: <span id="ageVal">25</span> yrs</label>
+        <input id="age" type="range" min="10" max="85" step="1" value="25">
+      </div>
+      <div class="slider">
+        <label>Noise level: <span id="dbaVal">85</span> dB(A)</label>
+        <input id="dba" type="range" min="70" max="110" step="1" value="85">
+      </div>
+      <div class="slider">
+        <label>Years exposed: <span id="yearsVal">1</span></label>
+        <input id="years" type="range" min="0" max="40" step="1" value="1">
+      </div>
+    </div>
+    <div class="row">
+      <div class="slider">
+        <label>Hours/week: <span id="hoursVal">5</span></label>
+        <input id="hours" type="range" min="0" max="60" step="1" value="5">
+      </div>
+      <div class="help">Badge shows estimated 4 kHz loss and severity tier.</div>
+    </div>
+  </div>
+
+  <!-- Manual EQ -->
+  <div class="card" id="manualCard" style="display:none">
+    <h2>Manual Frequency Attenuation (dB)</h2>
+    <div class="eq-grid" id="eqGrid"></div>
+  </div>
+
+  <!-- Disease / Tinnitus -->
+  <div class="card">
+    <h2>Pathologies & Tinnitus</h2>
+    <div class="row">
+      <div>
+        <label>Model</label>
+        <select id="disease">
+          <option value="none">None</option>
+          <option value="nihl">Noise-induced notch (4 kHz)</option>
+          <option value="conductive">Conductive loss (broad + LP)</option>
+          <option value="meniere">Ménière’s (low-freq loss)</option>
+        </select>
+      </div>
+      <div class="row" style="gap:12px">
+        <div class="slider">
+          <label>Tinnitus tone: <span id="tFreqVal">8000</span> Hz</label>
+          <input id="tFreq" type="range" min="1000" max="12000" step="100" value="8000">
+        </div>
+        <div class="inline" style="align-items:flex-end">
+          <div class="slider" style="width:220px">
+            <label>Tinnitus level (dB): <span id="tDbVal">-28</span></label>
+            <input id="tDb" type="range" min="-60" max="-6" step="1" value="-28">
+          </div>
+          <label class="inline" style="margin:0 0 6px 8px">
+            <input id="tOn" type="checkbox"> Enable tinnitus
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Background / Echo -->
+  <div class="card">
+    <h2>Background Mix & Echo</h2>
+    <div class="row">
+      <div class="slider">
+        <label>Background level (dB): <span id="bgGainVal">-12</span></label>
+        <input id="bgGain" type="range" min="-40" max="0" step="1" value="-12">
+        <div class="inline help"><input id="bgLoop" type="checkbox" checked> Loop background during playback</div>
+      </div>
+      <div class="slider">
+        <label>Main level (dB): <span id="mainGainVal">0</span></label>
+        <input id="mainGain" type="range" min="-24" max="0" step="1" value="0">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="inline"><input type="checkbox" id="useVerb" checked><label for="useVerb">Enable convolution reverb</label></div>
+      <div></div>
+    </div>
+    <div class="row3">
+      <div class="slider">
+        <label>Pre-delay (ms): <span id="predelayVal">50</span></label>
+        <input id="predelay" type="range" min="0" max="200" step="5" value="50">
+      </div>
+      <div class="slider">
+        <label>Decay (s): <span id="decayVal">2.5</span></label>
+        <input id="decay" type="range" min="0.2" max="6" step="0.1" value="2.5">
+      </div>
+      <div class="slider">
+        <label>Wet (%): <span id="wetVal">35</span></label>
+        <input id="wet" type="range" min="0" max="100" step="1" value="35">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="inline"><input type="checkbox" id="farCall" /><label for="farCall">“Far call” echo (discrete + air absorption)</label></div>
+      <div></div>
+    </div>
+    <div class="row3" id="farCallPanel" style="display:none">
+      <div class="slider">
+        <label>Distance (m): <span id="distVal">150</span></label>
+        <input id="distM" type="range" min="20" max="1000" step="5" value="150">
+      </div>
+      <div class="slider">
+        <label>Feedback (%): <span id="fbVal">35</span></label>
+        <input id="echoFb" type="range" min="0" max="90" step="1" value="35">
+      </div>
+      <div class="slider">
+        <label>Hi-cut (Hz): <span id="hcVal">3500</span></label>
+        <input id="hiCut" type="range" min="800" max="6000" step="50" value="3500">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="inline"><input type="checkbox" id="farAdv" /><label for="farAdv">Advanced: dual delay + modulation</label></div>
+      <div></div>
+    </div>
+    <div class="row3" id="farAdvPanel" style="display:none">
+      <div class="slider">
+        <label>L/R offset (ms): <span id="lrOffVal">±50</span></label>
+        <input id="lrOffset" type="range" min="0" max="150" step="5" value="50">
+      </div>
+      <div class="slider">
+        <label>Mod rate (Hz): <span id="modRateVal">0.8</span></label>
+        <input id="modRate" type="range" min="0.2" max="3" step="0.1" value="0.8">
+      </div>
+      <div class="slider">
+        <label>Mod depth (ms): <span id="modDepthVal">3</span></label>
+        <input id="modDepth" type="range" min="0" max="10" step="0.5" value="3">
+      </div>
+      <div class="slider">
+        <label>Stereo width: <span id="widthVal">0.8</span></label>
+        <input id="width" type="range" min="0" max="1" step="0.05" value="0.8">
+      </div>
+    </div>
+  </div>
+
+  <!-- Spectrum -->
+  <div class="card">
+    <h2>Live Spectrum</h2>
+    <canvas id="viz"></canvas>
+    <div class="help">Shows what reaches your speakers/headphones in real time.</div>
+  </div>
+
+  <!-- Waveform & Peak -->
+  <div class="card">
+    <div class="toggle">
+      <h2>Waveform & Peak Screenshot</h2>
+      <div class="toolbar"><button id="toggleAudioPanel" class="ghost">Expand</button></div>
+    </div>
+    <div id="audioPanel" style="display:none">
+      <div class="row">
+        <div>
+          <label>Analyze</label>
+          <div class="inline">
+            <label class="inline"><input type="radio" name="srcForPeak" value="raw" checked> Source (raw)</label>
+            <label class="inline"><input type="radio" name="srcForPeak" value="rendered"> Final mix (what you hear)</label>
+          </div>
+        </div>
+        <div class="inline" style="justify-content:flex-end">
+          <button id="analyzePeak" class="primary">🔍 Find Peak</button>
+          <button id="savePeakPng">🖼 Save PNG</button>
+        </div>
+      </div>
+      <div id="waveWrap" style="margin-top:10px"><canvas id="waveform" width="1400" height="320"></canvas></div>
+      <div id="peakInfo" class="help">Not analyzed</div>
+    </div>
+  </div>
+
+  <!-- Loss Map -->
+  <div class="card">
+    <div class="toggle">
+      <h2>Frequency Loss Map (dB vs Hz)</h2>
+      <div class="toolbar"><button id="toggleLossPanel" class="ghost">Expand</button></div>
+    </div>
+    <div id="lossPanel" style="display:none">
+      <div class="row" style="align-items:end">
+        <div class="help">Blue: total attenuation curve. Red region ≥10 dB loss, Amber 3–10 dB.</div>
+        <div class="toolbar">
+          <button id="redrawLoss">🔄 Redraw</button>
+          <button id="saveLossPng">🖼 Save PNG</button>
+        </div>
+      </div>
+      <div id="lossWrap" style="margin-top:10px"><canvas id="lossCanvas" width="1400" height="320"></canvas></div>
+      <div class="help">Log frequency axis (20 Hz–20 kHz). Y axis: 0 to −40 dB.</div>
+    </div>
+  </div>
+
+  <div class="help">For creative/educational use only.</div>
+</div>
+
+<script>
+let actx, analyser, vizRAF;
+let mainBuf = null, bgBuf = null;
+let live = { mainSrc:null, bgSrc:null, tSrc:null, master:null, analyser:null, stopFns:[] };
+
+const bands = [125,250,500,1000,2000,4000,8000];
+let manualGainsDb = {125:0,250:0,500:0,1000:0,2000:0,4000:0,8000:0};
+
+const $ = id => document.getElementById(id);
+const modeSel = $("mode");
+const diseaseSel = $("disease");
+
+const predCard = $("predCard"), manualCard=$("manualCard");
+const age=$("age"), dba=$("dba"), years=$("years"), hours=$("hours");
+const ageVal=$("ageVal"), dbaVal=$("dbaVal"), yearsVal=$("yearsVal"), hoursVal=$("hoursVal");
+const hlBadge = $("hlBadge");
+
+const mainGain=$("mainGain"), mainGainVal=$("mainGainVal");
+const bgGain=$("bgGain"), bgGainVal=$("bgGainVal"), bgLoop=$("bgLoop");
+
+const useVerb=$("useVerb"), predelay=$("predelay"), decay=$("decay"), wet=$("wet");
+const predelayVal=$("predelayVal"), decayVal=$("decayVal"), wetVal=$("wetVal");
+
+const tOn=$("tOn"), tFreq=$("tFreq"), tDb=$("tDb"), tFreqVal=$("tFreqVal"), tDbVal=$("tDbVal");
+
+const playBtn=$("play"), stopBtn=$("stop"), dlBtn=$("download");
+const mainFile=$("mainFile"), bgFile=$("bgFile");
+
+const farCall = $("farCall"), farCallPanel = $("farCallPanel");
+const distM = $("distM"), echoFb = $("echoFb"), hiCut = $("hiCut");
+const distVal = $("distVal"), fbVal = $("fbVal"), hcVal = $("hcVal");
+const farAdv = $("farAdv"), farAdvPanel = $("farAdvPanel");
+const lrOffset = $("lrOffset"), modRate = $("modRate"), modDepth = $("modDepth"), width = $("width");
+const lrOffVal = $("lrOffVal"), modRateVal = $("modRateVal"), modDepthVal = $("modDepthVal"), widthVal = $("widthVal");
+
+const toggleAudioPanelBtn = $("toggleAudioPanel");
+const audioPanel = $("audioPanel");
+const analyzePeakBtn = $("analyzePeak");
+const savePeakPngBtn = $("savePeakPng");
+const waveformCanvas = $("waveform");
+const peakInfo = $("peakInfo");
+
+const toggleLossPanelBtn = $("toggleLossPanel");
+const lossPanel = $("lossPanel");
+const redrawLossBtn = $("redrawLoss");
+const saveLossPngBtn = $("saveLossPng");
+const lossCanvas = $("lossCanvas");
+
+const dB2gain = dB => Math.pow(10, dB/20);
+const clamp = (x,a,b)=>Math.min(b,Math.max(a,x));
+
+function togglePanel(btnEl, panelEl){
+  const isOpen = getComputedStyle(panelEl).display !== "none";
+  panelEl.style.display = isOpen ? "none" : "block";
+  btnEl.textContent = isOpen ? "Expand" : "Collapse";
+}
+
+function makeEQUI(){
+  const grid = $("eqGrid");
+  bands.forEach(f=>{
+    const div=document.createElement("div");
+    div.className="eq-band";
+    div.innerHTML = `
+      <label>${f} Hz attenuation: <span id="g${f}">0</span> dB</label>
+      <input type="range" min="-40" max="0" step="1" value="0" data-f="${f}">
+      <span>${f} Hz</span>`;
+    grid.appendChild(div);
+  });
+  grid.querySelectorAll("input[type=range]").forEach(r=>{
+    r.addEventListener("input", e=>{
+      const f = +e.target.dataset.f;
+      manualGainsDb[f] = +e.target.value;
+      $("g"+f).textContent = e.target.value;
+      scheduleDrawLoss();
+    });
+  });
+}
+makeEQUI();
+
+function estimateHL4k({age,dba,years,hours}){
+  const ageHL = Math.max(0, age-35)*0.6;
+  const expFactor = Math.max(0, dba-80)*0.15 * Math.sqrt(Math.max(0,years)*Math.max(0,hours)/10);
+  return clamp(ageHL + expFactor, 0, 70);
+}
+function updateHLBadge(){
+  const hl = estimateHL4k({age:+age.value,dba:+dba.value,years:+years.value,hours:+hours.value});
+  let cls="ok", label="Normal/Mild";
+  if (hl>20 && hl<=35){ cls="warn"; label="Moderate"; }
+  if (hl>35){ cls="bad"; label="Mod/Severe"; }
+  hlBadge.className = "pill "+cls;
+  hlBadge.textContent = `Est. 4 kHz loss: ${hl.toFixed(0)} dB HL (${label})`;
+}
+
+[age,dba,years,hours].forEach(x=>{
+  x.addEventListener("input", ()=>{
+    ageVal.textContent=age.value; dbaVal.textContent=dba.value;
+    yearsVal.textContent=years.value; hoursVal.textContent=hours.value;
+    updateHLBadge();
+    scheduleDrawLoss();
+  });
+});
+
+function buildLossFilters(ctx, mode, disease){
+  const nodes = [];
+  const add = n => { nodes.push(n); return n; };
+  function hs(freq, gainDb){ const n = ctx.createBiquadFilter(); n.type="highshelf"; n.frequency.value=freq; n.gain.value=gainDb; return add(n); }
+  function ls(freq, gainDb){ const n = ctx.createBiquadFilter(); n.type="lowshelf"; n.frequency.value=freq; n.gain.value=gainDb; return add(n); }
+  function pk(freq, gainDb, Q=1){ const n = ctx.createBiquadFilter(); n.type="peaking"; n.frequency.value=freq; n.Q.value=Q; n.gain.value=gainDb; return add(n); }
+  function lp(freq){ const n = ctx.createBiquadFilter(); n.type="lowpass"; n.frequency.value=freq; n.Q.value=0.7; return add(n); }
+
+  if (mode === "manual"){
+    bands.forEach(f=>{ const g = clamp(manualGainsDb[f], -40, 0); if (g!==0) pk(f,g, f>=2000?1.1:0.9); });
+  } else if (mode !== "none"){
+    let hl4k;
+    if (mode === "mild") hl4k = 20; else if (mode === "moderate") hl4k = 30; else if (mode === "modsev") hl4k = 40;
+    else hl4k = estimateHL4k({age:+age.value,dba:+dba.value,years:+years.value,hours:+hours.value});
+    hs(2000, -hl4k); pk(4000, -0.5*hl4k, 1); pk(8000, -0.3*hl4k, 0.9);
+  }
+
+  if (disease === "nihl"){ pk(4000, -15, 4.0); }
+  else if (disease === "conductive"){ pk(1000, -10, 0.7); hs(3000,-6); lp(9000); }
+  else if (disease === "meniere"){ ls(800, -12); pk(2000, -3, 1.1); }
+
+  return nodes;
+}
+
+function generateIR(ctx, seconds=2.5, decay=2.5){
+  const sr = ctx.sampleRate, len = Math.max(1, Math.floor(seconds*sr));
+  const ir = ctx.createBuffer(2, len, sr);
+  for (let ch=0; ch<2; ch++){
+    const data = ir.getChannelData(ch);
+    for (let i=0; i<len; i++){
+      const env = Math.pow(1 - i/len, decay);
+      const early = (i % Math.floor(sr*0.011))===0 ? 1 : 0;
+      data[i] = (Math.random()*2-1) * env * (early? 0.4 : 0.25);
+    }
+  }
+  return ir;
+}
+
+function buildTinnitus(ctx, hz, dB){
+  const src = ctx.createOscillator(); src.type = "sine"; src.frequency.value = hz;
+  const g = ctx.createGain(); g.gain.value = dB2gain(dB);
+  src.connect(g); return {src, gain:g};
+}
+
+function makeEchoBranch(ctx, inputNode, {delaySec, hiCutHz, fb, pan, modRateHz, modDepthMs}, stopFns){
+  const send = ctx.createGain(); send.gain.value = 0.8;
+  const dly = ctx.createDelay(5.0); dly.delayTime.value = delaySec;
+  const tone = ctx.createBiquadFilter(); tone.type="lowpass"; tone.frequency.value = hiCutHz;
+  const fbGain = ctx.createGain(); fbGain.gain.value = clamp(fb,0,0.95);
+  const out = ctx.createGain(); out.gain.value = 0.7;
+  const panner = ctx.createStereoPanner(); panner.pan.value = clamp(pan,-1,1);
+  inputNode.connect(send); send.connect(dly); dly.connect(tone); tone.connect(fbGain); fbGain.connect(dly); tone.connect(out); out.connect(panner);
+  if (modRateHz>0 && modDepthMs>0){
+    const osc = ctx.createOscillator(); osc.type="sine"; osc.frequency.value=modRateHz;
+    const depth=ctx.createGain(); depth.gain.value=modDepthMs/1000; osc.connect(depth).connect(dly.delayTime);
+    osc.start(); stopFns.push(()=>{try{osc.stop();}catch{}});
+  }
+  return {out: panner, stopFns};
+}
+
+function hookGraph(ctx, sourceBuf, bgBufOpt, opts){
+  const {
+    lossMode, disease, mainGainDb, bgGainDb, bgLoop,
+    useVerb, predelayMs, decaySec, wetPct,
+    tinnitusOn, tinnitusFreq, tinnitusDb,
+    farCall, distM, echoFb, hiCutHz,
+    farAdv, lrOffsetMs, modRateHz, modDepthMs, width
+  } = opts;
+
+  const master = ctx.createGain(); master.gain.value = 1.0;
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+
+  const mainSrc = ctx.createBufferSource(); mainSrc.buffer = sourceBuf;
+  const mainGain = ctx.createGain(); mainGain.gain.value = dB2gain(mainGainDb);
+
+  const filters = buildLossFilters(ctx, lossMode, disease);
+  let chainHead = mainSrc; filters.forEach(f=>{ chainHead.connect(f); chainHead = f; });
+
+  let dryNode = ctx.createGain(); dryNode.gain.value = 1.0;
+  let wetNode = ctx.createGain(); wetNode.gain.value = clamp(wetPct/100, 0, 1);
+  let preDelay = ctx.createDelay(1.0); preDelay.delayTime.value = predelayMs/1000;
+
+  if (useVerb){ const conv = ctx.createConvolver(); conv.buffer = generateIR(ctx, Math.max(0.2,decaySec), Math.max(0.5,decaySec));
+    chainHead.connect(dryNode); chainHead.connect(preDelay); preDelay.connect(conv); conv.connect(wetNode);
+  } else { chainHead.connect(dryNode); }
+
+  const stopFns=[];
+  if (farCall){
+    const baseDelay = clamp((2*distM)/343, 0.05, 4.0);
+    if (farAdv){
+      const panWidth = clamp(width,0,1);
+      const L = makeEchoBranch(ctx, chainHead, {delaySec: baseDelay + lrOffsetMs/1000, hiCutHz, fb: echoFb/100, pan: -panWidth, modRateHz, modDepthMs}, stopFns);
+      const R = makeEchoBranch(ctx, chainHead, {delaySec: baseDelay - lrOffsetMs/1000, hiCutHz, fb: echoFb/100, pan: +panWidth, modRateHz, modDepthMs}, stopFns);
+      L.out.connect(dryNode); R.out.connect(dryNode);
+    } else {
+      const S = makeEchoBranch(ctx, chainHead, {delaySec: baseDelay, hiCutHz, fb: echoFb/100, pan: 0, modRateHz:0, modDepthMs:0}, stopFns);
+      S.out.connect(dryNode);
+    }
+  }
+
+  if (useVerb){ dryNode.connect(mainGain); wetNode.connect(mainGain); } else { dryNode.connect(mainGain); }
+  mainGain.connect(analyser); analyser.connect(master); master.connect(ctx.destination);
+
+  let bgSrc=null, bgGainNode=null;
+  if (bgBufOpt){
+    bgSrc = ctx.createBufferSource(); bgSrc.buffer = bgBufOpt; bgSrc.loop = !!bgLoop;
+    bgGainNode = ctx.createGain(); bgGainNode.gain.value = dB2gain(bgGainDb);
+    bgSrc.connect(bgGainNode); bgGainNode.connect(master);
+  }
+
+  let tSrc=null; if (tinnitusOn){ const t = buildTinnitus(ctx, tinnitusFreq, tinnitusDb); tSrc = t.src; t.gain.connect(master); }
+
+  stopFns.push(()=>{ try{mainSrc.stop();}catch{} }); if (bgSrc) stopFns.push(()=>{ try{bgSrc.stop();}catch{} }); if (tSrc) stopFns.push(()=>{ try{tSrc.stop();}catch{} });
+
+  return { mainSrc, bgSrc, tSrc, master, analyser, stopFns };
+}
+
+function startViz(analyser){
+  cancelAnimationFrame(vizRAF);
+  const canvas = $("viz"), g = canvas.getContext("2d");
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  (function draw(){
+    analyser.getByteFrequencyData(data);
+    g.fillStyle="#000"; g.fillRect(0,0,canvas.width,canvas.height);
+    const bw = canvas.width / data.length;
+    g.fillStyle = "#77f0ff";
+    for (let i=0; i<data.length; i++){
+      const h = (data[i]/255) * canvas.height;
+      g.fillRect(i*bw, canvas.height-h, bw*0.9, h);
+    }
+    vizRAF = requestAnimationFrame(draw);
+  })();
+}
+
+async function playNow(){
+  if (!mainBuf){ alert("Please choose a main audio file."); return; }
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  if (actx.state === "suspended") { try { await actx.resume(); } catch(e){ console.error(e); } }
+  stopNow();
+  const opts = collectOpts();
+  live = hookGraph(actx, mainBuf, bgBuf, opts);
+  try{
+    live.mainSrc.start(0);
+    if (live.bgSrc) live.bgSrc.start(0);
+    if (live.tSrc)  live.tSrc.start(0);
+  }catch(e){
+    console.error(e); alert("Playback failed to start.");
+    return;
+  }
+  live.mainSrc.onended = () => { stopNow(); };
+  startViz(live.analyser);
+}
+function stopNow(){
+  if (live && live.stopFns){ live.stopFns.forEach(fn=>fn()); live.stopFns=[]; }
+  cancelAnimationFrame(vizRAF);
+}
+
+async function downloadRendered(){
+  if (!mainBuf){ alert("Please choose a main audio file."); return; }
+  const rendered = await renderFinalBuffer();
+  const wav = audioBufferToWav(rendered);
+  const blob = new Blob([wav],{type:"audio/wav"}); const a=document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download="hearing_loss_mix.wav";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function collectOpts(){
+  return {
+    lossMode: modeSel.value, disease: diseaseSel.value,
+    mainGainDb: +mainGain.value, bgGainDb: +bgGain.value, bgLoop: bgLoop.checked,
+    useVerb: useVerb.checked, predelayMs: +predelay.value, decaySec: +decay.value, wetPct: +wet.value,
+    tinnitusOn: tOn.checked, tinnitusFreq: +tFreq.value, tinnitusDb: +tDb.value,
+    farCall: farCall.checked, distM: +distM.value, echoFb: +echoFb.value, hiCutHz: +hiCut.value,
+    farAdv: farAdv.checked, lrOffsetMs: +lrOffset.value, modRateHz: +modRate.value, modDepthMs: +modDepth.value, width: +width.value
+  };
+}
+
+async function renderFinalBuffer(){
+  const sampleRate = 48000, lengthSec = mainBuf.duration;
+  const off = new OfflineAudioContext({ numberOfChannels:2, length: Math.ceil(lengthSec*sampleRate), sampleRate });
+  const g = hookGraph(off, mainBuf, bgBuf, collectOpts());
+  g.master.connect(off.destination); g.mainSrc.start(0); if (g.bgSrc) g.bgSrc.start(0); if (g.tSrc) g.tSrc.start(0);
+  return await off.startRendering();
+}
+
+function audioBufferToWav(buffer){
+  const numCh = buffer.numberOfChannels, sr = buffer.sampleRate, len = buffer.length;
+  const blockAlign = numCh*2, dataLen = len*blockAlign, totalLen = 44+dataLen;
+  const ab = new ArrayBuffer(totalLen), view = new DataView(ab); let pos=0;
+  const ws=s=>{for(let i=0;i<s.length;i++) view.setUint8(pos++, s.charCodeAt(i));};
+  const u16=v=>{view.setUint16(pos,v,true);pos+=2;}, u32=v=>{view.setUint32(pos,v,true);pos+=4;};
+  ws("RIFF"); u32(totalLen-8); ws("WAVE"); ws("fmt "); u32(16); u16(1); u16(numCh); u32(sr); u32(sr*blockAlign); u16(blockAlign); u16(16);
+  ws("data"); u32(dataLen);
+  const chs=[]; for(let ch=0; ch<numCh; ch++) chs.push(buffer.getChannelData(ch));
+  for(let i=0;i<len;i++){ for(let ch=0; ch<numCh; ch++){ let s=chs[ch][i]; s=Math.max(-1,Math.min(1,s)); view.setInt16(pos, s<0?s*0x8000:s*0x7FFF, true); pos+=2; } }
+  return ab;
+}
+
+async function decodeFileToBuf(file){
+  const arr = await file.arrayBuffer();
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  return await actx.decodeAudioData(arr.slice(0));
+}
+mainFile.addEventListener("change", async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  mainBuf = await decodeFileToBuf(f);
+});
+bgFile.addEventListener("change", async e=>{
+  const f = e.target.files[0]; if(!f){bgBuf=null;return;}
+  bgBuf = await decodeFileToBuf(f);
+});
+
+modeSel.addEventListener("change", ()=>{
+  predCard.style.display = (modeSel.value==="pred")? "block":"none";
+  manualCard.style.display = (modeSel.value==="manual")? "block":"none";
+  if (modeSel.value==="pred") updateHLBadge();
+  scheduleDrawLoss();
+});
+diseaseSel.addEventListener("change", scheduleDrawLoss);
+
+[mainGain,bgGain].forEach(x=>x.addEventListener("input", ()=>{
+  mainGainVal.textContent = mainGain.value; bgGainVal.textContent = bgGain.value;
+}));
+[tFreq,tDb].forEach(x=>x.addEventListener("input", ()=>{
+  tFreqVal.textContent = tFreq.value; tDbVal.textContent = tDb.value;
+}));
+[predelay,decay,wet].forEach(x=>x.addEventListener("input", ()=>{
+  predelayVal.textContent = predelay.value; decayVal.textContent = decay.value; wetVal.textContent = wet.value;
+}));
+farCall.addEventListener("change", ()=>{ farCallPanel.style.display = farCall.checked ? "grid" : "none"; });
+[distM, echoFb, hiCut].forEach(x=>x.addEventListener("input", ()=>{
+  distVal.textContent = distM.value; fbVal.textContent = echoFb.value; hcVal.textContent = hiCut.value;
+}));
+farAdv.addEventListener("change", ()=>{ farAdvPanel.style.display = farAdv.checked ? "grid" : "none"; });
+[lrOffset, modRate, modDepth, width].forEach(x=>x.addEventListener("input", ()=>{
+  lrOffVal.textContent = "±" + lrOffset.value; modRateVal.textContent = modRate.value;
+  modDepthVal.textContent = modDepth.value; widthVal.textContent = width.value;
+}));
+
+toggleAudioPanelBtn.addEventListener("click", ()=>{ togglePanel(toggleAudioPanelBtn, audioPanel); });
+toggleLossPanelBtn.addEventListener("click", ()=>{
+  const wasOpen = getComputedStyle(lossPanel).display !== "none";
+  togglePanel(toggleLossPanelBtn, lossPanel);
+  if (!wasOpen) drawLossMap();
+});
+
+analyzePeakBtn.addEventListener("click", async ()=>{
+  const src = document.querySelector('input[name="srcForPeak"]:checked')?.value || "raw";
+  let buf; if (src==="raw"){ if(!mainBuf) return alert("Load a main audio first."); buf=mainBuf; }
+  else { if(!mainBuf) return alert("Load a main audio first."); buf=await renderFinalBuffer(); }
+  const {peak, peakDb, peakIndex, peakTime} = findPeak(buf);
+  drawWaveform(buf, peakIndex);
+  peakInfo.textContent = `Peak: ${(peak*100).toFixed(2)}%FS | ${peakDb.toFixed(2)} dBFS @ ${peakTime.toFixed(3)} s`;
+});
+savePeakPngBtn.addEventListener("click", ()=>{
+  const link=document.createElement("a"); link.download="waveform_peak.png"; link.href=waveformCanvas.toDataURL("image/png");
+  document.body.appendChild(link); link.click(); link.remove();
+});
+
+function findPeak(buffer){
+  const chs = buffer.numberOfChannels, len = buffer.length; let peak=0, peakIndex=0;
+  for (let i=0;i<len;i++){
+    let v=0; for (let ch=0; ch<chs; ch++){ v=Math.max(v, Math.abs(buffer.getChannelData(ch)[i])); }
+    if (v>peak){ peak=v; peakIndex=i; }
+  }
+  const peakDb = peak>0 ? 20*Math.log10(peak) : -Infinity; const peakTime = peakIndex / buffer.sampleRate;
+  return {peak, peakDb, peakIndex, peakTime};
+}
+function drawWaveform(buffer, highlightIndex=null){
+  const ctx = waveformCanvas.getContext("2d"), W=waveformCanvas.width, H=waveformCanvas.height;
+  ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
+  const total=buffer.length, step=Math.ceil(total/W);
+  ctx.strokeStyle="#77f0ff"; ctx.lineWidth=1; ctx.beginPath();
+  for(let x=0;x<W;x++){
+    const start=x*step, end=Math.min(total,start+step); let min=1,max=-1;
+    for(let i=start;i<end;i++){
+      let v=0; for(let ch=0; ch<buffer.numberOfChannels; ch++) v=Math.max(v, Math.abs(buffer.getChannelData(ch)[i]));
+      min=Math.min(min,-v); max=Math.max(max,v);
+    }
+    const y1=(1-(max+1)/2)*H, y2=(1-(min+1)/2)*H; ctx.moveTo(x,y1); ctx.lineTo(x,y2);
+  }
+  ctx.stroke();
+  ctx.strokeStyle="rgba(255,255,255,.15)"; ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+  if (highlightIndex!=null){
+    const x=Math.floor((highlightIndex/total)*W);
+    ctx.strokeStyle="#ff6b6b"; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    const t=(highlightIndex / buffer.sampleRate).toFixed(3)+" s";
+    ctx.fillStyle="rgba(0,0,0,.7)"; ctx.fillRect(Math.max(0,x-40),8,110,22);
+    ctx.fillStyle="#ff6b6b"; ctx.font="12px Inter"; ctx.fillText("Peak @ "+t, Math.max(0,x-35),24);
+  }
+}
+
+let drawLossTimer=null;
+function scheduleDrawLoss(){ clearTimeout(drawLossTimer); drawLossTimer=setTimeout(()=>drawLossMap(), 120); }
+
+function drawLossMap(){
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+
+  const ctx = lossCanvas.getContext("2d");
+  const CW = lossCanvas.width, CH = lossCanvas.height;
+
+  const P = { l: 58, r: 16, t: 12, b: 32 };
+  const W = CW - P.l - P.r;
+  const H = CH - P.t - P.b;
+
+  const N = 512, fmin = 20, fmax = 20000;
+  const freqs = new Float32Array(N);
+  for (let i=0;i<N;i++){ const t=i/(N-1); freqs[i] = fmin * Math.pow(fmax/fmin, t); }
+
+  const filters = buildLossFilters(actx, modeSel.value, diseaseSel.value);
+  const totalMag = new Float32Array(N); totalMag.fill(1.0);
+  if (filters.length){
+    const mag = new Float32Array(N), phase = new Float32Array(N);
+    filters.forEach(f=>{
+      try{ f.getFrequencyResponse(freqs, mag, phase);
+        for (let i=0;i<N;i++) totalMag[i] *= mag[i];
+      }catch(e){}
+    });
+  }
+  const totalDb = new Float32Array(N);
+  for (let i=0;i<N;i++){
+    const m = Math.max(1e-6, totalMag[i]);
+    totalDb[i] = Math.max(-40, Math.min(6, 20*Math.log10(m)));
+  }
+
+  ctx.fillStyle = "#000"; ctx.fillRect(0,0,CW,CH);
+
+  const yMin = -40, yMax = 6;
+  const xFromFreq = f => {
+    const t=(Math.log(f)-Math.log(fmin))/(Math.log(fmax)-Math.log(fmin));
+    return P.l + t*W;
+  };
+  const yFromDb = db => {
+    const t=(db - yMax)/(yMin - yMax);
+    return P.t + t*H;
+  };
+
+  ctx.strokeStyle="rgba(255,255,255,.08)"; ctx.lineWidth=1;
+  [20,50,100,200,500,1000,2000,4000,8000,16000].forEach(f=>{
+    const x=xFromFreq(f); ctx.beginPath(); ctx.moveTo(x,P.t); ctx.lineTo(x,P.t+H); ctx.stroke();
+  });
+
+  ctx.strokeStyle="rgba(255,255,255,.12)";
+  [0,-10,-20,-30,-40].forEach(d=>{
+    const y=yFromDb(d); ctx.beginPath(); ctx.moveTo(P.l,y); ctx.lineTo(P.l+W,y); ctx.stroke();
+  });
+
+  ctx.strokeStyle="rgba(255,255,255,.18)"; ctx.setLineDash([4,4]);
+  [125,250,500,1000,2000,4000,8000].forEach(f=>{
+    const x=xFromFreq(f); ctx.beginPath(); ctx.moveTo(x,P.t); ctx.lineTo(x,P.t+H); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(P.l, P.t); ctx.lineTo(P.l, P.t+H); ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.85)"; ctx.font="12px Inter";
+  for (let d=0; d>=-40; d-=5){
+    const y=yFromDb(d);
+    const tickLen = (d%10===0)? 8 : 4;
+    ctx.strokeStyle="rgba(255,255,255,.6)";
+    ctx.beginPath(); ctx.moveTo(P.l - tickLen, y); ctx.lineTo(P.l, y); ctx.stroke();
+    if (d%10===0){
+      const label = d===0 ? "0" : d.toString();
+      ctx.fillText(label, P.l - 10 - ctx.measureText(label).width, y+4);
+    }
+  }
+  ctx.save(); ctx.translate(16, P.t + H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText("Attenuation (dB)", 0, 0); ctx.restore();
+
+  ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(P.l, P.t+H); ctx.lineTo(P.l+W, P.t+H); ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.85)"; ctx.font="12px Inter";
+  [125,250,500,1000,2000,4000,8000].forEach(f=>{
+    const x=xFromFreq(f);
+    ctx.strokeStyle="rgba(255,255,255,.6)";
+    ctx.beginPath(); ctx.moveTo(x, P.t+H); ctx.lineTo(x, P.t+H+6); ctx.stroke();
+    const txt = f>=1000 ? (f/1000)+"k" : String(f);
+    const tw = ctx.measureText(txt).width;
+    ctx.fillText(txt, x - tw/2, P.t+H+20);
+  });
+  ctx.fillText("Frequency (Hz, log)", P.l + W - 140, P.t+H+28);
+
+  shadeLoss(totalDb, 10, "rgba(255,107,107,.15)");
+  shadeLoss(totalDb, 3,  "rgba(255,200,87,.12)");
+
+  ctx.strokeStyle="#77f0ff"; ctx.lineWidth=2; ctx.beginPath();
+  for (let i=0;i<N;i++){
+    const x = xFromFreq(freqs[i]), y = yFromDb(totalDb[i]);
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  const x4k = xFromFreq(4000);
+  ctx.strokeStyle="rgba(119,240,255,.7)";
+  ctx.beginPath(); ctx.moveTo(x4k,P.t); ctx.lineTo(x4k,P.t+H); ctx.stroke();
+  ctx.fillStyle="rgba(0,0,0,.7)"; ctx.fillRect(x4k-24, P.t+6, 48, 18);
+  ctx.fillStyle="#77f0ff"; ctx.fillText("4k", x4k-10, P.t+20);
+
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  ctx.fillRect(CW-210, 12, 10,10); ctx.fillText("≥10 dB region", CW-195, 22);
+  ctx.fillStyle="rgba(255,200,87,.9)"; ctx.fillRect(CW-210, 32, 10,10);
+  ctx.fillStyle="rgba(255,255,255,.85)"; ctx.fillText("3–10 dB region", CW-195, 42);
+  ctx.strokeStyle="#77f0ff"; ctx.beginPath(); ctx.moveTo(CW-210,56); ctx.lineTo(CW-200,56); ctx.stroke();
+  ctx.fillText("Total attenuation", CW-195, 60);
+
+  function shadeLoss(dbArr, thr, color){
+    const idx = [];
+    for (let i=0;i<dbArr.length;i++) if (-dbArr[i] >= thr) idx.push(i);
+    if (!idx.length) return;
+
+    ctx.fillStyle = color; ctx.beginPath();
+    for (let k=0;k<idx.length;k++){
+      const i=idx[k];
+      const x=xFromFreq(freqs[i]), y=yFromDb(dbArr[i]);
+      if (k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.lineTo(xFromFreq(freqs[idx[idx.length-1]]), P.t+H);
+    ctx.lineTo(xFromFreq(freqs[idx[0]]), P.t+H);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+redrawLossBtn.addEventListener("click", drawLossMap);
+saveLossPngBtn.addEventListener("click", ()=>{
+  const link=document.createElement("a"); link.download="loss_map.png"; link.href=lossCanvas.toDataURL("image/png");
+  document.body.appendChild(link); link.click(); link.remove();
+});
+
+function initUI(){
+  age.dispatchEvent(new Event("input"));
+  mainGain.dispatchEvent(new Event("input"));
+  bgGain.dispatchEvent(new Event("input"));
+  predelay.dispatchEvent(new Event("input"));
+  decay.dispatchEvent(new Event("input"));
+  wet.dispatchEvent(new Event("input"));
+  tFreq.dispatchEvent(new Event("input"));
+  tDb.dispatchEvent(new Event("input"));
+  distM.dispatchEvent(new Event("input"));
+  lrOffset.dispatchEvent(new Event("input"));
+  drawLossMap();
+}
+initUI();
+
+playBtn.addEventListener("click", playNow);
+stopBtn.addEventListener("click", stopNow);
+dlBtn.addEventListener("click", downloadRendered);
+
+</script>
+</body>
+</html>
